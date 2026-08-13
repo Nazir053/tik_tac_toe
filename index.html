@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="bn">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width,initial-scale=1" />
+	<title>Sci‑Fi Tic‑Tac‑Toe</title>
+	<style>
+		:root{
+			--bg:#05060a;
+			--neon-cyan:#00f0ff;
+			--neon-pink:#ff4dda;
+			--glass: rgba(255,255,255,0.03);
+			--accent: linear-gradient(90deg,var(--neon-cyan),var(--neon-pink));
+		}
+		*{box-sizing:border-box}
+		html,body{height:100%}
+		body{
+			margin:0;font-family:Inter,system-ui,Segoe UI,Arial;min-height:100%;
+			background: radial-gradient(ellipse at 10% 10%, rgba(0,255,255,0.04), transparent 8%),
+									radial-gradient(ellipse at 90% 80%, rgba(255,77,218,0.02), transparent 8%),
+									var(--bg);
+			color:#e6f7ff;display:flex;align-items:center;justify-content:center;padding:24px;
+		}
+		.scene{width:100%;max-width:760px}
+		.title{font-weight:700;font-size:1.6rem;letter-spacing:0.06em;text-align:center;margin:8px 0 18px;background:var(--accent);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+		.board-wrap{display:grid;grid-template-columns:1fr;gap:14px;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);padding:20px;border-radius:14px;box-shadow:0 6px 30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.02)}
+
+		.board{
+			display:grid;grid-template-columns:repeat(3,1fr);gap:12px;background:transparent;padding:12px;border-radius:12px
+		}
+		.cell{
+			position:relative;padding-top:100%; /* square */
+			background:linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.01));
+			border-radius:10px;overflow:hidden;cursor:pointer;transition:transform .12s ease,box-shadow .12s ease;display:block;
+			box-shadow:0 6px 18px rgba(0,0,0,0.6), 0 0 18px rgba(0,0,0,0.25) inset;
+			border:1px solid rgba(255,255,255,0.03);
+		}
+		.cell:hover{transform:translateY(-4px);box-shadow:0 12px 28px rgba(0,0,0,0.7)}
+		.inner{position:absolute;inset:10px;display:flex;align-items:center;justify-content:center}
+
+		.mark{width:86%;height:86%;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 6px 14px rgba(0,0,0,0.6));}
+
+		.mark svg{width:100%;height:100%;opacity:0;transform:scale(.6);transition:all .28s cubic-bezier(.2,.9,.3,1)}
+		.mark.x svg{stroke:var(--neon-pink);fill:none;stroke-width:8px;opacity:1;transform:scale(1)}
+		.mark.o svg{stroke:var(--neon-cyan);fill:none;stroke-width:8px;opacity:1;transform:scale(1)}
+
+		.controls{display:flex;align-items:center;justify-content:space-between;gap:12px}
+		.btn{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:10px 14px;border-radius:10px;color:inherit;cursor:pointer;backdrop-filter:blur(4px)}
+		.btn.primary{background:var(--accent);background-clip:padding-box;color:#061018;font-weight:700;border:none}
+
+		.status{font-size:0.98rem;text-align:center;color:rgba(230,247,255,0.9)}
+
+		.line{position:absolute;pointer-events:none;inset:0}
+		.line svg{width:100%;height:100%}
+
+		.win .cell{filter:grayscale(.2);opacity:.85}
+		.cell.win{box-shadow:0 0 34px rgba(0,0,0,0.6),0 0 28px rgba(0,0,0,0.4);outline:2px solid rgba(255,255,255,0.03);transform:translateY(-2px)}
+
+		.footer{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+
+		@media (max-width:520px){.scene{padding:8px}.title{font-size:1.2rem}}
+	</style>
+</head>
+<body>
+	<main class="scene">
+		<div class="title">Sci‑Fi Tic‑Tac‑Toe</div>
+		<div class="board-wrap">
+			<div id="board" class="board" aria-label="Tic Tac Toe board"></div>
+			<div class="footer">
+				<div class="status" id="status">Player X's turn</div>
+				<div class="controls">
+					<button id="restart" class="btn">Restart</button>
+					<button id="ai" class="btn">Two‑player</button>
+				</div>
+			</div>
+		</div>
+	</main>
+
+	<script>
+		const boardEl = document.getElementById('board');
+		const statusEl = document.getElementById('status');
+		const restartBtn = document.getElementById('restart');
+		const aiBtn = document.getElementById('ai');
+
+		let board = Array(9).fill(null);
+		let current = 'X';
+		let running = true;
+		let twoPlayer = true;
+
+		const wins = [
+			[0,1,2],[3,4,5],[6,7,8],
+			[0,3,6],[1,4,7],[2,5,8],
+			[0,4,8],[2,4,6]
+		];
+
+		function makeCell(i){
+			const cell = document.createElement('button');
+			cell.className='cell';
+			cell.setAttribute('data-i',i);
+			cell.setAttribute('aria-label','cell '+(i+1));
+			const inner = document.createElement('div');inner.className='inner';
+			const mark = document.createElement('div');mark.className='mark';
+			inner.appendChild(mark);cell.appendChild(inner);
+			cell.addEventListener('click',()=>onCellClick(i,cell));
+			return cell;
+		}
+
+		function render(){
+			boardEl.innerHTML='';
+			board.forEach((v,i)=>boardEl.appendChild(makeCell(i)));
+			updateMarks();
+		}
+
+		function updateMarks(){
+			board.forEach((v,i)=>{
+				const cell = boardEl.querySelector(`[data-i='${i}']`);
+				const mark = cell.querySelector('.mark');
+				mark.innerHTML='';
+				if(v){
+					mark.className='mark '+(v==='X'?'x':'o');
+					if(v==='X') mark.innerHTML = `
+						<svg viewBox="0 0 100 100" preserveAspectRatio="none">
+							<line x1="20" y1="20" x2="80" y2="80" stroke-linecap="round" />
+							<line x1="80" y1="20" x2="20" y2="80" stroke-linecap="round" />
+						</svg>`;
+					else mark.innerHTML = `
+						<svg viewBox="0 0 100 100" preserveAspectRatio="none">
+							<circle cx="50" cy="50" r="30" fill="none" />
+						</svg>`;
+				} else {
+					mark.className='mark';
+				}
+			});
+		}
+
+		function onCellClick(i,cell){
+			if(!running || board[i]) return;
+			board[i]=current; updateMarks();
+			const res = checkWin();
+			if(res){endGame(res);return}
+			current = current==='X'?'O':'X';
+			statusEl.textContent = `Player ${current}'s turn`;
+			if(!twoPlayer && current==='O'){
+				// simple AI: pick random empty
+				setTimeout(aiMove,220);
+			}
+		}
+
+		function aiMove(){
+			const empties = board.map((v,i)=>v?null:i).filter(n=>n!==null);
+			if(!empties.length) return;
+			const choice = empties[Math.floor(Math.random()*empties.length)];
+			const cell = boardEl.querySelector(`[data-i='${choice}']`);
+			onCellClick(choice,cell);
+		}
+
+		function checkWin(){
+			for(const combo of wins){
+				const [a,b,c]=combo; if(board[a] && board[a]===board[b] && board[a]===board[c]) return {winner:board[a],combo};
+			}
+			if(board.every(Boolean)) return {draw:true};
+			return null;
+		}
+
+		function endGame(result){
+			running=false;
+			if(result.draw){statusEl.textContent='Draw — no winners';return}
+			statusEl.textContent = `Player ${result.winner} wins!`;
+			// highlight
+			result.combo.forEach(i=>{
+				const c = boardEl.querySelector(`[data-i='${i}']`); if(c) c.classList.add('win');
+			});
+		}
+
+		restartBtn.addEventListener('click',()=>{
+			board = Array(9).fill(null);current='X';running=true;statusEl.textContent=`Player ${current}'s turn`;
+			boardEl.classList.remove('win');render();
+		});
+
+		aiBtn.addEventListener('click',()=>{
+			twoPlayer = !twoPlayer; aiBtn.textContent = twoPlayer? 'Two‑player' : 'Play vs AI';
+		});
+
+		// initial render
+		render();
+	</script>
+</body>
+</html>
